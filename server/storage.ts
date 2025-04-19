@@ -1,0 +1,145 @@
+import { users, type User, type InsertUser, habits, type Habit, type InsertHabit, completions, type Completion, type InsertCompletion } from "@shared/schema";
+import session from "express-session";
+import createMemoryStore from "memorystore";
+
+const MemoryStore = createMemoryStore(session);
+
+// modify the interface with any CRUD methods
+// you might need
+
+export interface IStorage {
+  getUser(id: number): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  
+  // Habits
+  getHabits(userId: number): Promise<Habit[]>;
+  getHabit(id: number): Promise<Habit | undefined>;
+  createHabit(habit: InsertHabit): Promise<Habit>;
+  updateHabit(id: number, habit: Partial<InsertHabit>): Promise<Habit | undefined>;
+  deleteHabit(id: number): Promise<boolean>;
+  
+  // Completions
+  getCompletions(userId: number, fromDate?: Date, toDate?: Date): Promise<Completion[]>;
+  getCompletionByHabitAndDate(habitId: number, date: Date): Promise<Completion | undefined>;
+  createCompletion(completion: InsertCompletion): Promise<Completion>;
+  deleteCompletion(id: number): Promise<boolean>;
+  
+  sessionStore: session.SessionStore;
+}
+
+export class MemStorage implements IStorage {
+  private users: Map<number, User>;
+  private habits: Map<number, Habit>;
+  private completions: Map<number, Completion>;
+  sessionStore: session.SessionStore;
+  userIdCounter: number;
+  habitIdCounter: number;
+  completionIdCounter: number;
+
+  constructor() {
+    this.users = new Map();
+    this.habits = new Map();
+    this.completions = new Map();
+    this.userIdCounter = 1;
+    this.habitIdCounter = 1;
+    this.completionIdCounter = 1;
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000,
+    });
+  }
+
+  async getUser(id: number): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.username === username,
+    );
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = this.userIdCounter++;
+    const user: User = { ...insertUser, id };
+    this.users.set(id, user);
+    return user;
+  }
+  
+  // Habits
+  async getHabits(userId: number): Promise<Habit[]> {
+    return Array.from(this.habits.values()).filter(
+      (habit) => habit.userId === userId,
+    );
+  }
+  
+  async getHabit(id: number): Promise<Habit | undefined> {
+    return this.habits.get(id);
+  }
+  
+  async createHabit(insertHabit: InsertHabit): Promise<Habit> {
+    const id = this.habitIdCounter++;
+    const createdAt = new Date();
+    const habit: Habit = { ...insertHabit, id, createdAt };
+    this.habits.set(id, habit);
+    return habit;
+  }
+  
+  async updateHabit(id: number, habitUpdate: Partial<InsertHabit>): Promise<Habit | undefined> {
+    const habit = this.habits.get(id);
+    if (!habit) return undefined;
+    
+    const updatedHabit: Habit = { ...habit, ...habitUpdate };
+    this.habits.set(id, updatedHabit);
+    return updatedHabit;
+  }
+  
+  async deleteHabit(id: number): Promise<boolean> {
+    return this.habits.delete(id);
+  }
+  
+  // Completions
+  async getCompletions(userId: number, fromDate?: Date, toDate?: Date): Promise<Completion[]> {
+    let completions = Array.from(this.completions.values()).filter(
+      (completion) => completion.userId === userId,
+    );
+    
+    if (fromDate) {
+      completions = completions.filter(completion => {
+        const completionDate = new Date(completion.date);
+        return completionDate >= fromDate;
+      });
+    }
+    
+    if (toDate) {
+      completions = completions.filter(completion => {
+        const completionDate = new Date(completion.date);
+        return completionDate <= toDate;
+      });
+    }
+    
+    return completions;
+  }
+  
+  async getCompletionByHabitAndDate(habitId: number, date: Date): Promise<Completion | undefined> {
+    const dateString = date.toDateString();
+    return Array.from(this.completions.values()).find(
+      (completion) => {
+        return completion.habitId === habitId && new Date(completion.date).toDateString() === dateString;
+      }
+    );
+  }
+  
+  async createCompletion(insertCompletion: InsertCompletion): Promise<Completion> {
+    const id = this.completionIdCounter++;
+    const completion: Completion = { ...insertCompletion, id };
+    this.completions.set(id, completion);
+    return completion;
+  }
+  
+  async deleteCompletion(id: number): Promise<boolean> {
+    return this.completions.delete(id);
+  }
+}
+
+export const storage = new MemStorage();
