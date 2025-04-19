@@ -62,10 +62,18 @@ export class PrismaStorage implements IStorage {
   // Habit operations
   async getHabits(userId: number | string): Promise<Habit[]> {
     try {
-      return await prisma.habit.findMany({
-        where: { userId: userId.toString() },
+      console.log('PrismaStorage: Getting habits for userId:', userId.toString());
+      
+      // For MongoDB, we need to use string comparison for userId
+      const habits = await prisma.habit.findMany({
+        where: { 
+          userId: userId.toString() 
+        },
         orderBy: { createdAt: 'desc' },
       });
+      
+      console.log(`PrismaStorage: Found ${habits.length} habits for user ${userId}`);
+      return habits;
     } catch (error) {
       console.error('Error getting habits:', error);
       return [];

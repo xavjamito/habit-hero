@@ -2,6 +2,7 @@ import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Drizzle schema definitions (for PostgreSQL, not used in MongoDB)
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -17,9 +18,20 @@ export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+// Modified User type to work with both MongoDB and PostgreSQL
+export type User = {
+  id: string | number;
+  username: string;
+  password: string;
+  name: string | null;
+  email: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
+export type InsertUser = z.infer<typeof insertUserSchema>;
+
+// Drizzle schema definitions (for PostgreSQL)
 export const habits = pgTable("habits", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
@@ -36,9 +48,20 @@ export const insertHabitSchema = createInsertSchema(habits).pick({
   color: true,
 });
 
-export type InsertHabit = z.infer<typeof insertHabitSchema>;
-export type Habit = typeof habits.$inferSelect;
+// Modified Habit type to work with both MongoDB and PostgreSQL
+export type Habit = {
+  id: string | number;
+  userId: string | number;
+  name: string;
+  description: string | null;
+  color: string | null;
+  createdAt: Date;
+  updatedAt?: Date;
+};
 
+export type InsertHabit = z.infer<typeof insertHabitSchema>;
+
+// Drizzle schema definitions (for PostgreSQL)
 export const completions = pgTable("completions", {
   id: serial("id").primaryKey(),
   habitId: integer("habit_id").notNull(),
@@ -52,5 +75,13 @@ export const insertCompletionSchema = createInsertSchema(completions).pick({
   date: true,
 });
 
+// Modified Completion type to work with both MongoDB and PostgreSQL
+export type Completion = {
+  id: string | number;
+  habitId: string | number;
+  userId: string | number;
+  date: Date;
+  createdAt?: Date;
+};
+
 export type InsertCompletion = z.infer<typeof insertCompletionSchema>;
-export type Completion = typeof completions.$inferSelect;
