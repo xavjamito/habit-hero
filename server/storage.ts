@@ -79,7 +79,7 @@ export class MemStorage implements IStorage {
     return this.habits.get(id);
   }
   
-  async createHabit(insertHabit: InsertHabit): Promise<Habit> {
+  async createHabit(insertHabit: Omit<Habit, 'id' | 'createdAt' | 'updatedAt'>): Promise<Habit> {
     const id = this.habitIdCounter++;
     const createdAt = new Date();
     const habit: Habit = {
@@ -138,7 +138,7 @@ export class MemStorage implements IStorage {
     );
   }
   
-  async createCompletion(insertCompletion: InsertCompletion): Promise<Completion> {
+  async createCompletion(insertCompletion: Omit<Completion, 'id' | 'createdAt'>): Promise<Completion> {
     const id = this.completionIdCounter++;
     
     // Ensure date is always present

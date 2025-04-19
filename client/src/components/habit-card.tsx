@@ -49,45 +49,58 @@ export default function HabitCard({ habit, isCompleted }: HabitCardProps) {
   const toggleCompletion = useMutation({
     mutationFn: async () => {
       if (isCompleted) {
-        // Find the completion ID for today
-        const today = new Date();
-        const todayStr = today.toDateString();
-        
-        console.log("Finding completion for today:", todayStr);
-        console.log("Available completions:", habitCompletions);
-        
-        const completion = habitCompletions.find(c => {
-          const completionDate = new Date(c.date);
-          const dateStr = completionDate.toDateString();
-          console.log(`Comparing ${dateStr} with ${todayStr}, habitId: ${c.habitId}, matching habit: ${c.habitId === habit.id}`);
-          return dateStr === todayStr && c.habitId.toString() === habit.id.toString();
-        });
-        
-        console.log("Found completion:", completion);
-        
-        if (completion) {
-          console.log("Deleting completion:", completion.id);
-          await apiRequest("DELETE", `/api/completions/${completion.id}`);
-        } else {
-          console.log("No completion found to delete");
-          throw new Error("No completion found for today");
+        try {
+          // Find the completion ID for today
+          const today = new Date();
+          const todayStr = today.toDateString();
+          
+          console.log("Finding completion for today:", todayStr);
+          console.log("Available completions:", habitCompletions);
+          
+          const completion = habitCompletions.find(c => {
+            const completionDate = new Date(c.date);
+            const dateStr = completionDate.toDateString();
+            console.log(`Comparing ${dateStr} with ${todayStr}, habitId: ${c.habitId}, matching habit: ${c.habitId.toString() === habit.id.toString()}`);
+            return dateStr === todayStr && c.habitId.toString() === habit.id.toString();
+          });
+          
+          console.log("Found completion:", completion);
+          
+          if (completion) {
+            console.log("Deleting completion:", completion.id);
+            await apiRequest("DELETE", `/api/completions/${completion.id}`);
+            return { wasCompleted: true };
+          } else {
+            console.log("No completion found to delete");
+            // Instead of throwing an error, we'll just return that it was already uncompleted
+            return { wasCompleted: false };
+          }
+        } catch (error) {
+          console.error("Error deleting completion:", error);
+          // If there was an error but it was a 404, that means the completion was already deleted
+          // We'll treat this as a success
+          if (error.message && error.message.includes("404")) {
+            return { wasCompleted: false };
+          }
+          throw error;
         }
       } else {
         // Create new completion
         console.log("Creating new completion for habit:", habit.id);
-        await apiRequest("POST", "/api/completions", {
+        const response = await apiRequest("POST", "/api/completions", {
           habitId: habit.id,
           date: new Date(),
         });
+        return { wasCompleted: false, newCompletion: await response.json() };
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       // Invalidate completions query to refresh the data
       queryClient.invalidateQueries({ queryKey: ["/api/completions"] });
       
       toast({
-        title: isCompleted ? "Habit unmarked" : "Habit completed!",
-        description: isCompleted 
+        title: result.wasCompleted ? "Habit unmarked" : "Habit completed!",
+        description: result.wasCompleted 
           ? "You've unmarked this habit for today." 
           : "Great job! Keep up the good work!",
       });
