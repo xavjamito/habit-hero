@@ -52,15 +52,29 @@ export default function HabitCard({ habit, isCompleted }: HabitCardProps) {
         // Find the completion ID for today
         const today = new Date();
         const todayStr = today.toDateString();
-        const completion = habitCompletions.find(
-          (c) => new Date(c.date).toDateString() === todayStr
-        );
+        
+        console.log("Finding completion for today:", todayStr);
+        console.log("Available completions:", habitCompletions);
+        
+        const completion = habitCompletions.find(c => {
+          const completionDate = new Date(c.date);
+          const dateStr = completionDate.toDateString();
+          console.log(`Comparing ${dateStr} with ${todayStr}, habitId: ${c.habitId}, matching habit: ${c.habitId === habit.id}`);
+          return dateStr === todayStr && c.habitId.toString() === habit.id.toString();
+        });
+        
+        console.log("Found completion:", completion);
         
         if (completion) {
+          console.log("Deleting completion:", completion.id);
           await apiRequest("DELETE", `/api/completions/${completion.id}`);
+        } else {
+          console.log("No completion found to delete");
+          throw new Error("No completion found for today");
         }
       } else {
         // Create new completion
+        console.log("Creating new completion for habit:", habit.id);
         await apiRequest("POST", "/api/completions", {
           habitId: habit.id,
           date: new Date(),
@@ -68,7 +82,7 @@ export default function HabitCard({ habit, isCompleted }: HabitCardProps) {
       }
     },
     onSuccess: () => {
-      // Invalidate completions query
+      // Invalidate completions query to refresh the data
       queryClient.invalidateQueries({ queryKey: ["/api/completions"] });
       
       toast({
@@ -79,6 +93,7 @@ export default function HabitCard({ habit, isCompleted }: HabitCardProps) {
       });
     },
     onError: (error) => {
+      console.error("Error toggling completion:", error);
       toast({
         title: "Error",
         description: `Failed to ${isCompleted ? "unmark" : "complete"} habit: ${error.message}`,

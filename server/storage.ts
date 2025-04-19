@@ -8,6 +8,7 @@ const MemoryStore = createMemoryStore(session);
 // modify the interface with any CRUD methods
 // you might need
 
+// Updated IStorage interface to work with both PostgreSQL and MongoDB types
 export interface IStorage {
   getUser(id: number | string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -16,14 +17,14 @@ export interface IStorage {
   // Habits
   getHabits(userId: number | string): Promise<Habit[]>;
   getHabit(id: number | string): Promise<Habit | undefined>;
-  createHabit(habit: InsertHabit): Promise<Habit>;
-  updateHabit(id: number | string, habit: Partial<InsertHabit>): Promise<Habit | undefined>;
+  createHabit(habit: Omit<Habit, 'id' | 'createdAt' | 'updatedAt'>): Promise<Habit>;
+  updateHabit(id: number | string, habit: Partial<Omit<Habit, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>): Promise<Habit | undefined>;
   deleteHabit(id: number | string): Promise<boolean>;
   
   // Completions
   getCompletions(userId: number | string, fromDate?: Date, toDate?: Date): Promise<Completion[]>;
   getCompletionByHabitAndDate(habitId: number | string, date: Date): Promise<Completion | undefined>;
-  createCompletion(completion: InsertCompletion): Promise<Completion>;
+  createCompletion(completion: Omit<Completion, 'id' | 'createdAt'>): Promise<Completion>;
   deleteCompletion(id: number | string): Promise<boolean>;
   
   sessionStore: session.Store;

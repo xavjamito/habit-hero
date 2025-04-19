@@ -154,24 +154,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     try {
       const completionId = req.params.id;
-      // First get the completion to check ownership
-      const completion = await prisma.completion.findUnique({
-        where: { id: completionId },
-      });
+      console.log(`Delete completion request for ID: ${completionId}`);
+      
+      // Get completions for the user
+      const userCompletions = await storage.getCompletions(req.user.id);
+      
+      // Find the specific completion
+      const completion = userCompletions.find(c => c.id.toString() === completionId);
       
       if (!completion) {
+        console.log(`Completion not found: ${completionId}`);
         return res.status(404).json({ error: "Completion not found" });
       }
       
-      if (completion.userId !== req.user.id) {
-        return res.status(403).json({ error: "Not authorized to delete this completion" });
-      }
-      
+      // At this point we know the user owns the completion since we filtered by user ID
       const success = await storage.deleteCompletion(completionId);
       
       if (success) {
+        console.log(`Successfully deleted completion: ${completionId}`);
         res.sendStatus(204);
       } else {
+        console.error(`Failed to delete completion: ${completionId}`);
         res.status(500).json({ error: "Failed to delete completion" });
       }
     } catch (error) {
