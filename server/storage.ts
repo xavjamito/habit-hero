@@ -1,6 +1,7 @@
 import { users, type User, type InsertUser, habits, type Habit, type InsertHabit, completions, type Completion, type InsertCompletion } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { PrismaStorage } from './prisma-storage';
 
 const MemoryStore = createMemoryStore(session);
 
@@ -157,4 +158,26 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// You can swap between in-memory storage or database storage here
+// Use MemStorage for development and testing
+// Use PrismaStorage for production with MongoDB
+
+// Function to create the appropriate storage based on environment
+function createStorage(): IStorage {
+  try {
+    // If the DATABASE_URL is available and valid, use PrismaStorage
+    if (process.env.DATABASE_URL) {
+      console.log("Using PrismaStorage with MongoDB");
+      return new PrismaStorage();
+    } else {
+      console.log("DATABASE_URL not available, falling back to MemStorage");
+      return new MemStorage();
+    }
+  } catch (error) {
+    console.error("Error initializing PrismaStorage:", error);
+    console.log("Falling back to MemStorage");
+    return new MemStorage();
+  }
+}
+
+export const storage = createStorage();

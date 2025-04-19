@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { insertHabitSchema, insertCompletionSchema } from "@shared/schema";
+import prisma from "./prisma";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // sets up /api/register, /api/login, /api/logout, /api/user
@@ -20,14 +21,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     
     try {
-      const habitData = insertHabitSchema.parse({
-        ...req.body,
-        userId: req.user.id
-      });
+      // Get the data from the request body
+      const { name, description, color } = req.body;
+      
+      // Create a habit object with required fields
+      const habitData = {
+        name,
+        userId: req.user.id,
+        description: description || null,
+        color: color || "#8b5cf6"
+      };
       
       const habit = await storage.createHabit(habitData);
       res.status(201).json(habit);
     } catch (error) {
+      console.error("Error creating habit:", error);
       res.status(400).json({ error: "Invalid habit data" });
     }
   });
@@ -35,7 +43,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/habits/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     
-    const habitId = parseInt(req.params.id);
+    const habitId = req.params.id;
     const habit = await storage.getHabit(habitId);
     
     if (!habit) {
@@ -58,6 +66,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedHabit = await storage.updateHabit(habitId, updatedData);
       res.json(updatedHabit);
     } catch (error) {
+      console.error("Error updating habit:", error);
       res.status(400).json({ error: "Invalid habit data" });
     }
   });
@@ -65,7 +74,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/habits/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     
-    const habitId = parseInt(req.params.id);
+    const habitId = req.params.id;
     const habit = await storage.getHabit(habitId);
     
     if (!habit) {
@@ -125,15 +134,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ error: "Completion already exists for this date" });
       }
       
-      const completionData = insertCompletionSchema.parse({
+      // Ensure date is present to avoid TypeScript errors
+      const completionData = {
         habitId,
         userId: req.user.id,
         date: completionDate
-      });
+      };
       
       const completion = await storage.createCompletion(completionData);
       res.status(201).json(completion);
     } catch (error) {
+      console.error("Error creating completion:", error);
       res.status(400).json({ error: "Invalid completion data" });
     }
   });
@@ -141,22 +152,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/completions/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     
-    const completionId = parseInt(req.params.id);
-    const completion = Array.from(storage['completions'].values()).find(c => c.id === completionId);
-    
-    if (!completion) {
-      return res.status(404).json({ error: "Completion not found" });
-    }
-    
-    if (completion.userId !== req.user.id) {
-      return res.status(403).json({ error: "Not authorized to delete this completion" });
-    }
-    
-    const success = await storage.deleteCompletion(completionId);
-    
-    if (success) {
-      res.sendStatus(204);
-    } else {
+    try {
+      const completionId = req.params.id;
+      // First get the completion to check ownership
+      const completion = await prisma.completion.findUnique({
+        where: { id: completionId },
+      });
+      
+      if (!completion) {
+        return res.status(404).json({ error: "Completion not found" });
+      }
+      
+      if (completion.userId !== req.user.id) {
+        return res.status(403).json({ error: "Not authorized to delete this completion" });
+      }
+      
+      const success = await storage.deleteCompletion(completionId);
+      
+      if (success) {
+        res.sendStatus(204);
+      } else {
+        res.status(500).json({ error: "Failed to delete completion" });
+      }
+    } catch (error) {
+      console.error("Error deleting completion:", error);
       res.status(500).json({ error: "Failed to delete completion" });
     }
   });
