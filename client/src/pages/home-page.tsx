@@ -40,8 +40,11 @@ export default function HomePage() {
   const {
     data: completions = [],
     isLoading: isLoadingCompletions,
+    refetch: refetchCompletions,
   } = useQuery<Completion[]>({
     queryKey: ["/api/completions", { from: today.toISOString(), to: tomorrow.toISOString() }],
+    refetchInterval: 3000, // Refetch every 3 seconds to ensure UI is up to date
+    staleTime: 1000, // Data becomes stale after 1 second
   });
   
   // Filter habits based on search and completion status

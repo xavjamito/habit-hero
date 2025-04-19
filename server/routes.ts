@@ -122,7 +122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Verify the habit belongs to the user
       const habit = await storage.getHabit(habitId);
-      if (!habit || habit.userId !== req.user.id) {
+      if (!habit || habit.userId.toString() !== req.user.id.toString()) {
         return res.status(403).json({ error: "Not authorized" });
       }
       
@@ -130,8 +130,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if completion already exists for this habit and date
       const existingCompletion = await storage.getCompletionByHabitAndDate(habitId, completionDate);
+      
+      // If we found an existing completion, return it with a 409 status
+      // This is not an error condition - just indicating it already exists
       if (existingCompletion) {
-        return res.status(409).json({ error: "Completion already exists for this date" });
+        console.log(`Completion already exists for habit ${habitId} on ${completionDate.toDateString()}, returning it`);
+        // Return the existing completion with 409 status
+        return res.status(409).json(existingCompletion);
       }
       
       // Ensure date is present to avoid TypeScript errors
@@ -141,7 +146,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         date: completionDate
       };
       
+      console.log(`Creating completion for habit ${habitId} on ${completionDate.toDateString()}`);
       const completion = await storage.createCompletion(completionData);
+      console.log(`Successfully created completion: ${completion.id}`);
       res.status(201).json(completion);
     } catch (error) {
       console.error("Error creating completion:", error);

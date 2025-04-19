@@ -48,8 +48,8 @@ export default function HabitCard({ habit, isCompleted }: HabitCardProps) {
   // Toggle completion mutation
   const toggleCompletion = useMutation({
     mutationFn: async () => {
-      if (isCompleted) {
-        try {
+      try {
+        if (isCompleted) {
           // Find the completion ID for today
           const today = new Date();
           const todayStr = today.toDateString();
@@ -75,41 +75,80 @@ export default function HabitCard({ habit, isCompleted }: HabitCardProps) {
             // Instead of throwing an error, we'll just return that it was already uncompleted
             return { wasCompleted: false };
           }
-        } catch (error) {
-          console.error("Error deleting completion:", error);
-          // If there was an error but it was a 404, that means the completion was already deleted
-          // We'll treat this as a success
-          if (error.message && error.message.includes("404")) {
-            return { wasCompleted: false };
+        } else {
+          // Check if we already have a completion for today (to avoid 409 errors)
+          const today = new Date();
+          const todayStr = today.toDateString();
+          
+          const existingCompletion = habitCompletions.find(c => {
+            const completionDate = new Date(c.date);
+            const dateStr = completionDate.toDateString();
+            return dateStr === todayStr && c.habitId.toString() === habit.id.toString();
+          });
+          
+          if (existingCompletion) {
+            console.log("Habit is already completed today:", existingCompletion);
+            return { wasCompleted: false, newCompletion: existingCompletion, alreadyCompleted: true };
           }
-          throw error;
+          
+          // Create new completion
+          console.log("Creating new completion for habit:", habit.id);
+          try {
+            const response = await apiRequest("POST", "/api/completions", {
+              habitId: habit.id,
+              date: new Date(),
+            });
+            
+            if (response.status === 409) {
+              // If we get a 409, it means the completion already exists
+              // We'll treat this as a success and refresh the data
+              console.log("Completion already exists (409), treating as success");
+              return { wasCompleted: false, alreadyCompleted: true };
+            }
+            
+            const newCompletion = await response.json();
+            return { wasCompleted: false, newCompletion };
+          } catch (error: any) {
+            if (error.message && error.message.includes("409")) {
+              console.log("Completion already exists, treating as success");
+              return { wasCompleted: false, alreadyCompleted: true };
+            }
+            throw error;
+          }
         }
-      } else {
-        // Create new completion
-        console.log("Creating new completion for habit:", habit.id);
-        const response = await apiRequest("POST", "/api/completions", {
-          habitId: habit.id,
-          date: new Date(),
-        });
-        return { wasCompleted: false, newCompletion: await response.json() };
+      } catch (error: any) {
+        console.error("Error in toggle completion:", error);
+        throw error;
       }
     },
     onSuccess: (result) => {
       // Invalidate completions query to refresh the data
       queryClient.invalidateQueries({ queryKey: ["/api/completions"] });
       
-      toast({
-        title: result.wasCompleted ? "Habit unmarked" : "Habit completed!",
-        description: result.wasCompleted 
-          ? "You've unmarked this habit for today." 
-          : "Great job! Keep up the good work!",
-      });
+      // Force refetch the completions immediately to update the UI
+      queryClient.refetchQueries({ queryKey: ["/api/completions"] });
+      
+      if (!result.alreadyCompleted) {
+        toast({
+          title: result.wasCompleted ? "Habit unmarked" : "Habit completed!",
+          description: result.wasCompleted 
+            ? "You've unmarked this habit for today." 
+            : "Great job! Keep up the good work!",
+        });
+      }
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error toggling completion:", error);
+      let errorMessage = error.message;
+      
+      // Check for specific error codes
+      if (errorMessage && errorMessage.includes("409")) {
+        errorMessage = "This habit is already completed for today.";
+      }
+      
       toast({
         title: "Error",
-        description: `Failed to ${isCompleted ? "unmark" : "complete"} habit: ${error.message}`,
+        description: `Failed to ${isCompleted ? "unmark" : "complete"} habit: ${errorMessage}`,
         variant: "destructive",
       });
     },
