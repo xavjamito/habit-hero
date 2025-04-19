@@ -28,8 +28,7 @@ const registerSchema = insertUserSchema.extend({
 type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
-// Separate the component to prevent React rules of hooks issues
-function AuthPageContent() {
+export default function AuthPage() {
   const [activeTab, setActiveTab] = useState<string>("login");
   const { user, loginMutation, registerMutation } = useAuth();
   const [, navigate] = useLocation();
@@ -289,31 +288,4 @@ function AuthPageContent() {
       </div>
     </div>
   );
-}
-
-// Export the wrapped component that safely handles AuthProvider issues
-export default function AuthPage() {
-  try {
-    return <AuthPageContent />;
-  } catch (error) {
-    console.error("Error in AuthPage:", error);
-    // Basic error fallback UI
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Card className="w-[350px]">
-          <CardHeader>
-            <CardTitle>Authentication Error</CardTitle>
-            <CardDescription>
-              There was a problem loading the authentication page. Please try refreshing the page.
-            </CardDescription>
-          </CardHeader>
-          <CardFooter>
-            <Button className="w-full" onClick={() => window.location.reload()}>
-              Refresh Page
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
 }
