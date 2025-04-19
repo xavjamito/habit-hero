@@ -1,10 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertHabitSchema } from "@shared/schema";
+import { type Habit } from "@shared/schema";
 import { z } from "zod";
-import { useAuth } from "@/hooks/use-auth";
-import { useMutation } from "@tanstack/react-query";
 import {
   apiRequest,
   queryClient,
@@ -33,75 +31,89 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
-// Extend the schema for the form
-const habitFormSchema = insertHabitSchema.omit({ userId: true }).extend({
+// Schema for editing a habit
+const habitEditSchema = z.object({
   name: z.string().min(1, "Habit name is required"),
-  // Color will be handled through state, keeping it optional in the form
+  description: z.string().optional(),
   color: z.string().optional(),
 });
 
-type HabitFormValues = z.infer<typeof habitFormSchema>;
+type HabitEditValues = z.infer<typeof habitEditSchema>;
 
 // Predefined colors for habit
 const habitColors = [
-  "#8b5cf6", // primary (default)
-  "#10b981", // secondary
-  "#f59e0b", // accent
-  "#3b82f6", // info
-  "#ef4444", // danger
-  "#64748b", // gray
+  "#8b5cf6", // purple
+  "#10b981", // green
+  "#f59e0b", // amber
+  "#3b82f6", // blue
+  "#ef4444", // red
+  "#64748b", // slate
 ];
 
-interface CreateHabitDialogProps {
+interface EditHabitDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  habit: Habit | null;
 }
 
-export default function CreateHabitDialog({
+export default function EditHabitDialog({
   open,
   onOpenChange,
-}: CreateHabitDialogProps) {
-  const { user } = useAuth();
+  habit,
+}: EditHabitDialogProps) {
   const { toast } = useToast();
   const [selectedColor, setSelectedColor] = useState(habitColors[0]);
-  const [repeatOption, setRepeatOption] = useState<string>("everyday");
-  const [enableReminders, setEnableReminders] = useState(false);
 
   // Form setup
-  const form = useForm<HabitFormValues>({
-    resolver: zodResolver(habitFormSchema),
+  const form = useForm<HabitEditValues>({
+    resolver: zodResolver(habitEditSchema),
     defaultValues: {
       name: "",
       description: "",
-      color: selectedColor,
+      color: "",
     },
   });
 
-  // Create habit mutation
-  const createHabit = useMutationWithInvalidation<any, void>(
-    async () => {
-      if (!user) throw new Error("User not authenticated");
+  // Update form when habit changes
+  useEffect(() => {
+    if (habit) {
+      form.reset({
+        name: habit.name,
+        description: habit.description || "",
+        color: habit.color || habitColors[0],
+      });
+      setSelectedColor(habit.color || habitColors[0]);
+    }
+  }, [habit, form]);
 
-      // Add the user ID and selected color
+  // Edit habit mutation
+  const editHabit = useMutationWithInvalidation<Habit, void>(
+    async () => {
+      if (!habit) throw new Error("No habit selected for editing");
+
       const habitData = {
         ...form.getValues(),
-        userId: user.id,
         color: selectedColor,
       };
 
-      const res = await apiRequest("POST", "/api/habits", habitData);
+      const res = await apiRequest("PUT", `/api/habits/${habit.id}`, habitData);
       return await res.json();
     },
     ["/api/habits"],
     {
       // Directly update the habits cache
-      updateCache: (newHabit, queryKey) => {
+      updateCache: (updatedHabit, queryKey) => {
         if (queryKey === "/api/habits") {
           // Get current habits from cache
           const currentHabits =
-            queryClient.getQueryData<any[]>([queryKey]) || [];
-          // Add the new habit to the list
-          queryClient.setQueryData([queryKey], [...currentHabits, newHabit]);
+            queryClient.getQueryData<Habit[]>([queryKey]) || [];
+
+          // Replace the updated habit in the list
+          const updatedHabits = currentHabits.map((h) =>
+            h.id === updatedHabit.id ? updatedHabit : h
+          );
+
+          queryClient.setQueryData([queryKey], updatedHabits);
         }
       },
       onSuccess: () => {
@@ -110,13 +122,13 @@ export default function CreateHabitDialog({
         onOpenChange(false);
 
         toast({
-          title: "Habit created",
-          description: "Your new habit has been created successfully",
+          title: "Habit updated",
+          description: "Your habit has been updated successfully",
         });
       },
       onError: (error: Error) => {
         toast({
-          title: "Failed to create habit",
+          title: "Failed to update habit",
           description: error.message || "Please try again later",
           variant: "destructive",
         });
@@ -125,8 +137,8 @@ export default function CreateHabitDialog({
   );
 
   // Form submission handler
-  const onSubmit = (values: HabitFormValues) => {
-    createHabit.mutate();
+  const onSubmit = (values: HabitEditValues) => {
+    editHabit.mutate();
   };
 
   return (
@@ -134,11 +146,9 @@ export default function CreateHabitDialog({
       <DialogContent className='sm:max-w-md'>
         <DialogHeader>
           <DialogTitle className='text-lg font-semibold'>
-            Add New Habit
+            Edit Habit
           </DialogTitle>
-          <DialogDescription>
-            Create a new habit to track your progress
-          </DialogDescription>
+          <DialogDescription>Update your habit details</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -167,54 +177,13 @@ export default function CreateHabitDialog({
                     <Input
                       placeholder='e.g. 10 minutes of mindfulness'
                       {...field}
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-
-            <div className='space-y-2'>
-              <FormLabel>Repeat</FormLabel>
-              <div className='flex flex-wrap gap-2'>
-                <Button
-                  type='button'
-                  variant={repeatOption === "everyday" ? "default" : "outline"}
-                  size='sm'
-                  onClick={() => setRepeatOption("everyday")}
-                  className='rounded-full'
-                >
-                  Every day
-                </Button>
-                <Button
-                  type='button'
-                  variant={repeatOption === "weekdays" ? "default" : "outline"}
-                  size='sm'
-                  onClick={() => setRepeatOption("weekdays")}
-                  className='rounded-full'
-                >
-                  Weekdays
-                </Button>
-                <Button
-                  type='button'
-                  variant={repeatOption === "weekends" ? "default" : "outline"}
-                  size='sm'
-                  onClick={() => setRepeatOption("weekends")}
-                  className='rounded-full'
-                >
-                  Weekends
-                </Button>
-                <Button
-                  type='button'
-                  variant={repeatOption === "custom" ? "default" : "outline"}
-                  size='sm'
-                  onClick={() => setRepeatOption("custom")}
-                  className='rounded-full'
-                >
-                  Custom
-                </Button>
-              </div>
-            </div>
 
             <div className='space-y-2'>
               <FormLabel>Color</FormLabel>
@@ -235,25 +204,6 @@ export default function CreateHabitDialog({
               </div>
             </div>
 
-            <div className='space-y-2'>
-              <FormLabel>Reminders</FormLabel>
-              <div className='flex items-center'>
-                <input
-                  type='checkbox'
-                  id='reminder-toggle'
-                  className='h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded'
-                  checked={enableReminders}
-                  onChange={(e) => setEnableReminders(e.target.checked)}
-                />
-                <label
-                  htmlFor='reminder-toggle'
-                  className='ml-2 block text-sm text-gray-700'
-                >
-                  Enable reminders
-                </label>
-              </div>
-            </div>
-
             <DialogFooter className='mt-6'>
               <Button
                 type='button'
@@ -262,14 +212,14 @@ export default function CreateHabitDialog({
               >
                 Cancel
               </Button>
-              <Button type='submit' disabled={createHabit.isPending}>
-                {createHabit.isPending ? (
+              <Button type='submit' disabled={editHabit.isPending}>
+                {editHabit.isPending ? (
                   <>
                     <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                    Creating...
+                    Updating...
                   </>
                 ) : (
-                  "Add Habit"
+                  "Save Changes"
                 )}
               </Button>
             </DialogFooter>

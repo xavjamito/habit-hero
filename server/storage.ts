@@ -2,6 +2,30 @@ import { users, type User, type InsertUser, habits, type Habit, type InsertHabit
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { PrismaStorage } from './prisma-storage';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+import * as fs from 'fs';
+
+// Configure dotenv
+console.log("-------------------------------------");
+console.log("Current working directory:", process.cwd());
+const envPath = path.resolve(process.cwd(), '.env');
+console.log(".env path:", envPath);
+console.log(".env file exists:", fs.existsSync(envPath));
+if (fs.existsSync(envPath)) {
+  console.log("Loading environment from:", envPath);
+  try {
+    const envContents = fs.readFileSync(envPath, 'utf8');
+    console.log(".env file content (first 20 chars):", envContents.substring(0, 20) + "...");
+  } catch (err) {
+    console.error("Error reading .env file:", err);
+  }
+  dotenv.config({ path: envPath });
+  console.log("DATABASE_URL after loading:", process.env.DATABASE_URL ? "exists" : "missing");
+} else {
+  console.log("No .env file found at:", envPath);
+}
+console.log("-------------------------------------");
 
 const MemoryStore = createMemoryStore(session);
 
@@ -167,11 +191,14 @@ export class MemStorage implements IStorage {
 function createStorage(): IStorage {
   try {
     // If the DATABASE_URL is available and valid, use PrismaStorage
-    if (process.env.DATABASE_URL) {
+    console.log("Checking for DATABASE_URL:", process.env.DATABASE_URL ? "Found" : "Not found");
+    
+    if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes("mongodb")) {
       console.log("Using PrismaStorage with MongoDB");
       return new PrismaStorage();
     } else {
-      console.log("DATABASE_URL not available, falling back to MemStorage");
+      console.log("DATABASE_URL not available or invalid, falling back to MemStorage");
+      console.log("DATABASE_URL value:", process.env.DATABASE_URL);
       return new MemStorage();
     }
   } catch (error) {

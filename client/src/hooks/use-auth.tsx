@@ -4,8 +4,17 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
-import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
+import {
+  insertUserSchema,
+  User as SelectUser,
+  InsertUser,
+} from "@shared/schema";
+import {
+  getQueryFn,
+  apiRequest,
+  queryClient,
+  useMutationWithInvalidation,
+} from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 type AuthContextType = {
@@ -31,69 +40,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
-  const loginMutation = useMutation({
-    mutationFn: async (credentials: LoginData) => {
+  const loginMutation = useMutationWithInvalidation<SelectUser, LoginData>(
+    async (credentials) => {
       const res = await apiRequest("POST", "/api/login", credentials);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
-      queryClient.setQueryData(["/api/user"], user);
-      toast({
-        title: "Login successful",
-        description: `Welcome back, ${user.name || user.username}!`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Login failed",
-        description: error.message || "Invalid username or password",
-        variant: "destructive",
-      });
-    },
-  });
+    [],
+    {
+      // Directly update the user data in cache
+      updateCache: (user) => {
+        queryClient.setQueryData(["/api/user"], user);
+      },
+      onSuccess: (user: SelectUser) => {
+        toast({
+          title: "Login successful",
+          description: `Welcome back, ${user.name || user.username}!`,
+        });
+      },
+      onError: (error: Error) => {
+        toast({
+          title: "Login failed",
+          description: error.message || "Invalid username or password",
+          variant: "destructive",
+        });
+      },
+    }
+  );
 
-  const registerMutation = useMutation({
-    mutationFn: async (credentials: InsertUser) => {
+  const registerMutation = useMutationWithInvalidation<SelectUser, InsertUser>(
+    async (credentials) => {
       const res = await apiRequest("POST", "/api/register", credentials);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
-      queryClient.setQueryData(["/api/user"], user);
-      toast({
-        title: "Registration successful",
-        description: `Welcome to HabitTrack, ${user.name || user.username}!`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Registration failed",
-        description: error.message || "Could not create account",
-        variant: "destructive",
-      });
-    },
-  });
+    [],
+    {
+      // Directly update the user data in cache
+      updateCache: (user) => {
+        queryClient.setQueryData(["/api/user"], user);
+      },
+      onSuccess: (user: SelectUser) => {
+        toast({
+          title: "Registration successful",
+          description: `Welcome to HabitTrack, ${user.name || user.username}!`,
+        });
+      },
+      onError: (error: Error) => {
+        toast({
+          title: "Registration failed",
+          description: error.message || "Could not create account",
+          variant: "destructive",
+        });
+      },
+    }
+  );
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
+  const logoutMutation = useMutationWithInvalidation<void, void>(
+    async () => {
       await apiRequest("POST", "/api/logout");
     },
-    onSuccess: () => {
-      queryClient.setQueryData(["/api/user"], null);
-      // Invalidate all queries to clear user data
-      queryClient.invalidateQueries();
-      toast({
-        title: "Logged out",
-        description: "You have been logged out successfully.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Logout failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+    ["/api/habits", "/api/completions"],
+    {
+      // Directly update the user data in cache
+      updateCache: () => {
+        queryClient.setQueryData(["/api/user"], null);
+      },
+      onSuccess: () => {
+        // Clear all cache data
+        queryClient.clear();
+        toast({
+          title: "Logged out",
+          description: "You have been logged out successfully.",
+        });
+      },
+      onError: (error: Error) => {
+        toast({
+          title: "Logout failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      },
+    }
+  );
 
   return (
     <AuthContext.Provider

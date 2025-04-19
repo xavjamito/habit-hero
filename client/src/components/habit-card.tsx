@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { Habit, Completion } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import {
+  apiRequest,
+  queryClient,
+  useMutationWithInvalidation,
+} from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,255 +26,347 @@ interface HabitCardProps {
 export default function HabitCard({ habit, isCompleted }: HabitCardProps) {
   const { toast } = useToast();
   const { user } = useAuth();
-  
+
   // Fetch completions for this habit
   const { data: habitCompletions = [] } = useQuery<Completion[]>({
     queryKey: ["/api/completions"],
     select: (data) => data.filter((c) => c.habitId === habit.id),
   });
-  
+
+  // Calculate the weekly progress (for the last 7 days)
+  const weeklyProgress = (() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const last7Days = Array.from({ length: 7 }).map((_, i) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      return date;
+    });
+
+    return last7Days.map((date) => {
+      const isCompleted = habitCompletions.some((completion) => {
+        const completionDate = new Date(completion.date);
+        completionDate.setHours(0, 0, 0, 0);
+        return completionDate.getTime() === date.getTime();
+      });
+
+      return {
+        date,
+        isCompleted,
+      };
+    });
+  })();
+
+  // Calculate completion percentage based on weekly progress
+  const completionPercentage = Math.round(
+    (weeklyProgress.filter((day) => day.isCompleted).length / 7) * 100
+  );
+
   // Calculate streak
-  // This is a simplified version - a real app would have more complex streak logic
   const calculateStreak = () => {
+    // Sort completions by date in descending order (newest first)
     const sortedCompletions = [...habitCompletions].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
-    
+
     if (sortedCompletions.length === 0) return 0;
-    
-    // Simple streak counting logic
-    // In a real app, we'd check for consecutive days
-    return sortedCompletions.length;
+
+    let currentStreak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Check if there's a completion for today
+    const todayCompleted = sortedCompletions.some((completion) => {
+      const completionDate = new Date(completion.date);
+      completionDate.setHours(0, 0, 0, 0);
+      return completionDate.getTime() === today.getTime();
+    });
+
+    if (!todayCompleted) {
+      // Check if there's a completion for yesterday to continue the streak
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const yesterdayCompleted = sortedCompletions.some((completion) => {
+        const completionDate = new Date(completion.date);
+        completionDate.setHours(0, 0, 0, 0);
+        return completionDate.getTime() === yesterday.getTime();
+      });
+
+      if (!yesterdayCompleted) return 0; // Break streak if neither today nor yesterday completed
+    }
+
+    // Calculate consecutive days
+    for (let i = 0; i < 365; i++) {
+      // Cap at 365 days to prevent infinite loop
+      const checkDate = new Date(today);
+      checkDate.setDate(checkDate.getDate() - i);
+      checkDate.setHours(0, 0, 0, 0);
+
+      const hasCompletion = sortedCompletions.some((completion) => {
+        const completionDate = new Date(completion.date);
+        completionDate.setHours(0, 0, 0, 0);
+        return completionDate.getTime() === checkDate.getTime();
+      });
+
+      if (hasCompletion) {
+        currentStreak++;
+      } else {
+        break; // Break the streak when we find a day without completion
+      }
+    }
+
+    return currentStreak;
   };
-  
-  const streak = calculateStreak();
-  
+
+  const currentStreak = calculateStreak();
+
   // Toggle completion mutation
-  const toggleCompletion = useMutation({
-    mutationFn: async () => {
+  const toggleCompletion = useMutationWithInvalidation<any, void>(
+    async () => {
       try {
         if (isCompleted) {
           // Find the completion ID for today
           const today = new Date();
           const todayStr = today.toDateString();
-          
-          console.log("Finding completion for today:", todayStr);
-          console.log("Available completions:", habitCompletions);
-          
-          const completion = habitCompletions.find(c => {
+
+          const completion = habitCompletions.find((c) => {
             const completionDate = new Date(c.date);
             const dateStr = completionDate.toDateString();
-            console.log(`Comparing ${dateStr} with ${todayStr}, habitId: ${c.habitId}, matching habit: ${c.habitId.toString() === habit.id.toString()}`);
-            return dateStr === todayStr && c.habitId.toString() === habit.id.toString();
+            return (
+              dateStr === todayStr &&
+              c.habitId.toString() === habit.id.toString()
+            );
           });
-          
-          console.log("Found completion:", completion);
-          
+
           if (completion) {
-            console.log("Deleting completion:", completion.id);
             await apiRequest("DELETE", `/api/completions/${completion.id}`);
-            return { wasCompleted: true };
+            return {
+              wasCompleted: true,
+              completionId: completion.id,
+              habitId: habit.id,
+            };
           } else {
-            console.log("No completion found to delete");
-            // Instead of throwing an error, we'll just return that it was already uncompleted
             return { wasCompleted: false };
           }
         } else {
-          // Check if we already have a completion for today (to avoid 409 errors)
-          const today = new Date();
-          const todayStr = today.toDateString();
-          
-          const existingCompletion = habitCompletions.find(c => {
-            const completionDate = new Date(c.date);
-            const dateStr = completionDate.toDateString();
-            return dateStr === todayStr && c.habitId.toString() === habit.id.toString();
-          });
-          
-          if (existingCompletion) {
-            console.log("Habit is already completed today:", existingCompletion);
-            return { wasCompleted: false, newCompletion: existingCompletion, alreadyCompleted: true };
-          }
-          
           // Create new completion
-          console.log("Creating new completion for habit:", habit.id);
-          try {
-            const response = await apiRequest("POST", "/api/completions", {
-              habitId: habit.id,
-              date: new Date(),
-            });
-            
-            if (response.status === 409) {
-              // If we get a 409, it means the completion already exists
-              // We'll treat this as a success and refresh the data
-              console.log("Completion already exists (409), treating as success");
-              return { wasCompleted: false, alreadyCompleted: true };
-            }
-            
-            const newCompletion = await response.json();
-            return { wasCompleted: false, newCompletion };
-          } catch (error: any) {
-            if (error.message && error.message.includes("409")) {
-              console.log("Completion already exists, treating as success");
-              return { wasCompleted: false, alreadyCompleted: true };
-            }
-            throw error;
+          const response = await apiRequest("POST", "/api/completions", {
+            habitId: habit.id,
+            date: new Date(),
+          });
+
+          if (response.status === 409) {
+            return { wasCompleted: false, alreadyCompleted: true };
           }
+
+          const newCompletion = await response.json();
+          return { wasCompleted: false, newCompletion, habitId: habit.id };
         }
       } catch (error: any) {
         console.error("Error in toggle completion:", error);
         throw error;
       }
     },
-    onSuccess: (result) => {
-      // Invalidate completions query to refresh the data
-      queryClient.invalidateQueries({ queryKey: ["/api/completions"] });
-      
-      // Force refetch the completions immediately to update the UI
-      queryClient.refetchQueries({ queryKey: ["/api/completions"] });
-      
-      if (!result.alreadyCompleted) {
+    ["/api/completions"],
+    {
+      // Directly update the completions cache
+      updateCache: (result, queryKey) => {
+        if (queryKey === "/api/completions") {
+          // Get current completions from cache
+          const completions =
+            queryClient.getQueryData<Completion[]>([queryKey]) || [];
+
+          if (result.wasCompleted && result.completionId) {
+            // If we deleted a completion, remove it from cache
+            queryClient.setQueryData(
+              [queryKey],
+              completions.filter((c) => c.id !== result.completionId)
+            );
+          } else if (result.newCompletion) {
+            // If we added a completion, add it to cache
+            queryClient.setQueryData(
+              [queryKey],
+              [...completions, result.newCompletion]
+            );
+          }
+        }
+      },
+      onSuccess: (result) => {
+        if (!result.alreadyCompleted) {
+          toast({
+            title: result.wasCompleted ? "Habit unmarked" : "Habit completed!",
+            description: result.wasCompleted
+              ? "You've unmarked this habit for today."
+              : "Great job! Keep up the good work!",
+          });
+        }
+      },
+      onError: (error: any) => {
+        console.error("Error toggling completion:", error);
+        let errorMessage = error.message;
+
+        // Check for specific error codes
+        if (errorMessage && errorMessage.includes("409")) {
+          errorMessage = "This habit is already completed for today.";
+        }
+
         toast({
-          title: result.wasCompleted ? "Habit unmarked" : "Habit completed!",
-          description: result.wasCompleted 
-            ? "You've unmarked this habit for today." 
-            : "Great job! Keep up the good work!",
+          title: "Error",
+          description: `Failed to ${
+            isCompleted ? "unmark" : "complete"
+          } habit: ${errorMessage}`,
+          variant: "destructive",
         });
-      }
-    },
-    onError: (error: any) => {
-      console.error("Error toggling completion:", error);
-      let errorMessage = error.message;
-      
-      // Check for specific error codes
-      if (errorMessage && errorMessage.includes("409")) {
-        errorMessage = "This habit is already completed for today.";
-      }
-      
-      toast({
-        title: "Error",
-        description: `Failed to ${isCompleted ? "unmark" : "complete"} habit: ${errorMessage}`,
-        variant: "destructive",
-      });
-    },
-  });
-  
+      },
+    }
+  );
+
   // Delete habit mutation
-  const deleteHabit = useMutation({
-    mutationFn: async () => {
+  const deleteHabit = useMutationWithInvalidation<any, void>(
+    async () => {
       await apiRequest("DELETE", `/api/habits/${habit.id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/habits"] });
-      toast({
-        title: "Habit deleted",
-        description: "The habit has been successfully removed",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to delete habit: ${error.message}`,
-        variant: "destructive",
-      });
-    },
-  });
-  
-  // Weekly progress
-  // Get the last 7 days of completions for UI display
-  const weeklyProgress = [...Array(7)].map((_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - 6 + i);
-    
-    return habitCompletions.some(
-      (c) => new Date(c.date).toDateString() === date.toDateString()
-    );
-  });
-  
-  // Calculate completion percentage
-  const completionPercentage = Math.round(
-    (weeklyProgress.filter(Boolean).length / 7) * 100
+    ["/api/habits", "/api/completions"],
+    {
+      onSuccess: () => {
+        toast({
+          title: "Habit deleted",
+          description: "The habit has been successfully removed",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: `Failed to delete habit: ${error.message}`,
+          variant: "destructive",
+        });
+      },
+    }
   );
-  
+
   // Animation for check mark
   const checkVariants = {
     checked: {
       pathLength: 1,
       transition: {
         duration: 0.5,
-        ease: "easeOut"
-      }
+        ease: "easeOut",
+      },
     },
     unchecked: {
-      pathLength: 0
-    }
+      pathLength: 0,
+    },
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-4 transition-all hover:translate-y-[-2px] duration-300">
-      <div className="flex justify-between items-start">
-        <div className="flex-1">
-          <div className="flex items-center">
-            <button 
+    <div className='bg-white rounded-lg shadow p-4 transition-all hover:translate-y-[-2px] duration-300'>
+      <div className='flex justify-between items-start'>
+        <div className='flex-1'>
+          <div className='flex items-center'>
+            <button
               className={`h-6 w-6 rounded-full border-2 flex items-center justify-center mr-3 transition-colors ${
-                isCompleted ? "border-secondary" : "border-gray-300 hover:border-secondary"
+                isCompleted
+                  ? "border-secondary bg-green-500"
+                  : "border-gray-300 hover:border-secondary"
               }`}
               onClick={() => toggleCompletion.mutate()}
               disabled={toggleCompletion.isPending}
             >
               {isCompleted && (
-                <motion.svg 
-                  className="h-4 w-4 text-secondary"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  initial="unchecked"
-                  animate="checked"
+                <motion.svg
+                  className='h-4 w-4 text-secondary'
+                  viewBox='0 0 24 24'
+                  fill='currentColor'
+                  xmlns='http://www.w3.org/2000/svg'
+                  initial='unchecked'
+                  animate='checked'
                 >
                   <motion.path
-                    d="M5 12L10 17L20 7"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                    d='M5 12L10 17L20 7'
+                    stroke='currentColor'
+                    strokeWidth='3'
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
                     variants={checkVariants}
                   />
                 </motion.svg>
               )}
             </button>
             <div>
-              <h3 className="font-medium text-foreground">{habit.name}</h3>
-              <p className="text-sm text-muted-foreground">{habit.description || "No description"}</p>
+              <h3 className='font-medium text-foreground'>{habit.name}</h3>
+              <p className='text-sm text-muted-foreground'>
+                {habit.description || "No description"}
+              </p>
             </div>
           </div>
         </div>
-        
-        <div className="flex items-center">
-          <div className="flex items-center mr-3">
-            <span className={`text-sm font-medium ${streak > 0 ? "text-accent" : "text-muted-foreground"}`}>
-              {streak > 0 ? `${streak} day streak` : "No streak yet"}
+
+        <div className='flex items-center'>
+          <div className='flex items-center mr-3'>
+            <span
+              className={`text-sm font-medium ${
+                currentStreak > 0 ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              {currentStreak > 0
+                ? `${currentStreak} day streak`
+                : "No streak yet"}
             </span>
-            <div className={`ml-1.5 ${streak > 0 ? "text-accent" : "text-destructive"}`}>
-              {streak > 0 ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            <div
+              className={`ml-1.5 ${
+                currentStreak > 0 ? "text-accent" : "text-destructive"
+              }`}
+            >
+              {currentStreak > 0 ? (
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  className='h-4 w-4'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'
+                >
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth='2'
+                    d='M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'
+                  />
                 </svg>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  className='h-4 w-4'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'
+                >
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth='2'
+                    d='M13 17h8m0 0V9m0 8l-8-8-4 4-6-6'
+                  />
                 </svg>
               )}
             </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                <MoreVertical className="h-5 w-5" />
+              <Button
+                variant='ghost'
+                size='icon'
+                className='text-muted-foreground hover:text-foreground'
+              >
+                <MoreVertical className='h-5 w-5' />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align='end'>
               <DropdownMenuItem
                 onClick={() => deleteHabit.mutate()}
-                className="text-destructive"
+                className='text-destructive'
               >
                 Delete Habit
               </DropdownMenuItem>
@@ -278,22 +374,31 @@ export default function HabitCard({ habit, isCompleted }: HabitCardProps) {
           </DropdownMenu>
         </div>
       </div>
-      
-      <div className="mt-3">
-        <div className="w-full bg-gray-200 rounded-full h-1.5">
-          <div 
-            className="bg-secondary h-1.5 rounded-full" 
+
+      <div className='mt-3'>
+        <div className='w-full bg-gray-200 rounded-full h-2.5 overflow-hidden shadow-inner'>
+          <div
+            className='h-2.5 rounded-full transition-all duration-500 ease-in-out bg-primary'
             style={{ width: `${completionPercentage}%` }}
           ></div>
         </div>
-        <div className="mt-1 grid grid-cols-7 gap-0.5">
-          {weeklyProgress.map((isCompleted, index) => (
-            <div 
+        {/* <div className='mt-2 grid grid-cols-7 gap-1'>
+          {weeklyProgress.map((day, index) => (
+            <div
               key={index}
-              className={`h-1.5 rounded-sm ${isCompleted ? 'bg-secondary' : 'bg-gray-200'}`}
-            ></div>
+              className={`h-5 rounded-md flex items-center justify-center transition-all duration-300 ${
+                day.isCompleted
+                  ? "bg-primary shadow-sm border border-primary/70"
+                  : "bg-gray-100 border border-gray-300 hover:bg-gray-200"
+              }`}
+              title={day.date.toLocaleDateString()}
+            >
+              {day.isCompleted && (
+                <div className='w-1.5 h-1.5 bg-white rounded-full'></div>
+              )}
+            </div>
           ))}
-        </div>
+        </div> */}
       </div>
     </div>
   );

@@ -10,10 +10,17 @@ export class PrismaStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
+    console.log("PrismaStorage constructor - DATABASE_URL:", process.env.DATABASE_URL ? "exists" : "missing");
+    if (process.env.DATABASE_URL) {
+      console.log("MongoDB URL (first 20 chars):", process.env.DATABASE_URL.substring(0, 20) + "...");
+    }
+    
     this.sessionStore = new MongoStore({
       mongoUrl: process.env.DATABASE_URL,
       collectionName: 'sessions',
     });
+    
+    console.log("MongoDB session store initialized");
   }
 
   // User operations

@@ -1,6 +1,20 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+import * as fs from 'fs';
+
+// Log current working directory
+const currentDir = process.cwd();
+console.log("Current working directory:", currentDir);
+const envPath = path.resolve(currentDir, '.env');
+console.log("Looking for .env file at:", envPath);
+console.log(".env file exists:", fs.existsSync(envPath));
+
+// Load environment variables from .env file
+dotenv.config();
+console.log("DATABASE_URL from env:", process.env.DATABASE_URL ? "exists" : "missing");
 
 const app = express();
 app.use(express.json());
