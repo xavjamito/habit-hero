@@ -8,31 +8,31 @@ const MemoryStore = createMemoryStore(session);
 // you might need
 
 export interface IStorage {
-  getUser(id: number): Promise<User | undefined>;
+  getUser(id: number | string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
   // Habits
-  getHabits(userId: number): Promise<Habit[]>;
-  getHabit(id: number): Promise<Habit | undefined>;
+  getHabits(userId: number | string): Promise<Habit[]>;
+  getHabit(id: number | string): Promise<Habit | undefined>;
   createHabit(habit: InsertHabit): Promise<Habit>;
-  updateHabit(id: number, habit: Partial<InsertHabit>): Promise<Habit | undefined>;
-  deleteHabit(id: number): Promise<boolean>;
+  updateHabit(id: number | string, habit: Partial<InsertHabit>): Promise<Habit | undefined>;
+  deleteHabit(id: number | string): Promise<boolean>;
   
   // Completions
-  getCompletions(userId: number, fromDate?: Date, toDate?: Date): Promise<Completion[]>;
-  getCompletionByHabitAndDate(habitId: number, date: Date): Promise<Completion | undefined>;
+  getCompletions(userId: number | string, fromDate?: Date, toDate?: Date): Promise<Completion[]>;
+  getCompletionByHabitAndDate(habitId: number | string, date: Date): Promise<Completion | undefined>;
   createCompletion(completion: InsertCompletion): Promise<Completion>;
-  deleteCompletion(id: number): Promise<boolean>;
+  deleteCompletion(id: number | string): Promise<boolean>;
   
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private habits: Map<number, Habit>;
   private completions: Map<number, Completion>;
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
   userIdCounter: number;
   habitIdCounter: number;
   completionIdCounter: number;
@@ -80,7 +80,13 @@ export class MemStorage implements IStorage {
   async createHabit(insertHabit: InsertHabit): Promise<Habit> {
     const id = this.habitIdCounter++;
     const createdAt = new Date();
-    const habit: Habit = { ...insertHabit, id, createdAt };
+    const habit: Habit = {
+      ...insertHabit,
+      id,
+      createdAt,
+      description: insertHabit.description || null,
+      color: insertHabit.color || "#8b5cf6"
+    };
     this.habits.set(id, habit);
     return habit;
   }
@@ -132,7 +138,16 @@ export class MemStorage implements IStorage {
   
   async createCompletion(insertCompletion: InsertCompletion): Promise<Completion> {
     const id = this.completionIdCounter++;
-    const completion: Completion = { ...insertCompletion, id };
+    
+    // Ensure date is always present
+    const date = insertCompletion.date || new Date();
+    
+    const completion: Completion = { 
+      ...insertCompletion, 
+      id,
+      date
+    };
+    
     this.completions.set(id, completion);
     return completion;
   }

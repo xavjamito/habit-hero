@@ -1,16 +1,16 @@
 import { IStorage } from './storage';
 import prisma from './prisma';
 import session from 'express-session';
-import { Habit, User, Completion } from '@prisma/client';
+import { type User, type Habit, type Completion } from '@shared/schema';
 import connectMongo from 'connect-mongo';
 
-const MongoStore = connectMongo(session);
+const MongoStore = connectMongo;
 
 export class PrismaStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = MongoStore.create({
+    this.sessionStore = new MongoStore({
       mongoUrl: process.env.DATABASE_URL,
       collectionName: 'sessions',
     });
