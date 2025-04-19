@@ -43,11 +43,18 @@ export class PrismaStorage implements IStorage {
 
   async createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> {
     try {
-      return await prisma.user.create({
+      console.log('PrismaStorage: Creating user with data:', { 
+        ...userData, 
+        password: '[REDACTED]' 
+      });
+      const newUser = await prisma.user.create({
         data: userData,
       });
+      console.log('PrismaStorage: User created successfully with ID:', newUser.id);
+      return newUser;
     } catch (error) {
       console.error('Error creating user:', error);
+      // If we get a connection error, throw it so our fallback can handle it
       throw error;
     }
   }
