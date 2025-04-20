@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onSuccess: (user: SelectUser) => {
         toast({
           title: "Registration successful",
-          description: `Welcome to HabitTrack, ${user.name || user.username}!`,
+          description: `Welcome to HabitHero, ${user.name || user.username}!`,
         });
       },
       onError: (error: Error) => {

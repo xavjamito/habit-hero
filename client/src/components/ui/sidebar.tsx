@@ -59,7 +59,7 @@ export function Sidebar() {
             />
           </svg>
         </div>
-        <h1 className='text-xl font-semibold ml-2'>HabitTrack</h1>
+        <h1 className='text-xl font-semibold ml-2'>HabitHero</h1>
       </div>
 
       <nav className='mt-8 flex-1'>
