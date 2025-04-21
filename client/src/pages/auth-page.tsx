@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,6 +25,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 // Extend the schema for login
 const loginSchema = z.object({
@@ -45,13 +47,23 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 export default function AuthPage() {
   const [activeTab, setActiveTab] = useState<string>("login");
   const { user, loginMutation, registerMutation } = useAuth();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  // If user is already logged in, redirect to home
-  if (user) {
-    navigate("/");
-    return null;
-  }
+  // Add console logs to track auth state
+  useEffect(() => {
+    console.log("Auth state changed:", {
+      user,
+      isLoginSuccess: loginMutation.isSuccess,
+    });
+
+    // Only navigate if we have a user
+    if (user) {
+      console.log("User authenticated, navigating to dashboard");
+      navigate("/", { replace: true });
+    }
+  }, [user, navigate, location]);
 
   // Forms
   const loginForm = useForm<LoginFormValues>({
@@ -73,11 +85,48 @@ export default function AuthPage() {
   });
 
   const onLoginSubmit = (data: LoginFormValues) => {
-    loginMutation.mutate(data);
+    console.log("Login submitted:", data);
+
+    // Disable the form while submitting
+    loginForm.reset(data, { keepValues: true });
+
+    loginMutation.mutate(data, {
+      onSuccess: (userData) => {
+        console.log("Login successful in mutation callback, user:", userData);
+
+        // Force the query client to update with the user data
+        queryClient.setQueryData(["/api/user"], userData);
+
+        // Use a small delay to ensure state updates have propagated
+        setTimeout(() => {
+          // Verify the user data is in the cache
+          const cachedUser = queryClient.getQueryData(["/api/user"]);
+          console.log("Cached user after login:", cachedUser);
+
+          // Force navigation regardless of user state
+          navigate("/", { replace: true });
+        }, 200);
+      },
+      onError: (error) => {
+        console.error("Login error in mutation callback:", error);
+        toast({
+          title: "Login failed",
+          description: "Please check your credentials and try again.",
+          variant: "destructive",
+        });
+      },
+    });
   };
 
   const onRegisterSubmit = (data: RegisterFormValues) => {
-    registerMutation.mutate(data);
+    console.log("Registration submitted:", data);
+    registerMutation.mutate(data, {
+      onSuccess: () => {
+        console.log("Registration successful, navigating");
+        // Force navigation after successful registration
+        setTimeout(() => navigate("/", { replace: true }), 100);
+      },
+    });
   };
 
   return (

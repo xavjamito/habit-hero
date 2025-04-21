@@ -45,22 +45,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/login", credentials);
       return await res.json();
     },
-    [],
+    ["/api/user"],
     {
       // Directly update the user data in cache
       updateCache: (user) => {
+        console.log("Updating user cache after login:", user);
         queryClient.setQueryData(["/api/user"], user);
       },
       onSuccess: (user: SelectUser) => {
+        console.log("Login success, user data:", user);
+        // Invalidate and refetch user data to ensure it's up to date
+        queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+
         toast({
           title: "Login successful",
           description: `Welcome back, ${user.name || user.username}!`,
         });
       },
       onError: (error: Error) => {
+        console.error("Login error:", error);
         toast({
           title: "Login failed",
-          description: error.message || "Invalid username or password",
+          description: "Invalid username or password",
           variant: "destructive",
         });
       },
@@ -72,19 +78,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/register", credentials);
       return await res.json();
     },
-    [],
+    ["/api/user"],
     {
       // Directly update the user data in cache
       updateCache: (user) => {
+        console.log("Updating user cache after registration:", user);
         queryClient.setQueryData(["/api/user"], user);
       },
       onSuccess: (user: SelectUser) => {
+        console.log("Registration success, user data:", user);
+        // Invalidate and refetch user data
+        queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+
         toast({
           title: "Registration successful",
           description: `Welcome to HabitHero, ${user.name || user.username}!`,
         });
       },
       onError: (error: Error) => {
+        console.error("Registration error:", error);
         toast({
           title: "Registration failed",
           description: error.message || "Could not create account",
