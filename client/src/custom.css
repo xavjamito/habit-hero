@@ -1,0 +1,47 @@
+/* Custom styles for dark theme */
+
+/* Background gradient overlay */
+.bg-gradient-overlay {
+  background: linear-gradient(135deg, rgba(30,41,59,0.8) 0%, rgba(17,24,39,0.9) 100%);
+}
+
+/* Glassmorphism effect */
+.glass-card {
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Custom button glow effect */
+.btn-glow {
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+  transition: all 0.3s ease;
+}
+
+.btn-glow:hover {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.7);
+}
+
+/* Custom input focus effect */
+.input-focus:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3b82f6;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #60a5fa;
+} 

@@ -9,6 +9,8 @@ import { queryClient } from "@/lib/queryClient";
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
+import ProfilePage from "@/pages/profile-page";
+import TasksPage from "@/pages/tasks-page";
 import CalendarPage from "@/pages/calendar-page";
 import HabitsPage from "@/pages/habits-page";
 import StatsPage from "@/pages/stats-page";
@@ -19,6 +21,8 @@ function Routes() {
     <Switch>
       <Route path='/auth' component={AuthPage} />
       <ProtectedRoute path='/' component={HomePage} />
+      <ProtectedRoute path='/profile' component={ProfilePage} />
+      <ProtectedRoute path='/tasks' component={TasksPage} />
       <ProtectedRoute path='/habits' component={HabitsPage} />
       <ProtectedRoute path='/calendar' component={CalendarPage} />
       <ProtectedRoute path='/stats' component={StatsPage} />

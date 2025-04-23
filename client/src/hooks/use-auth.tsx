@@ -26,7 +26,10 @@ type AuthContextType = {
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
 };
 
-type LoginData = Pick<InsertUser, "username" | "password">;
+type LoginData = {
+  email: string;
+  password: string;
+};
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -42,8 +45,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutationWithInvalidation<SelectUser, LoginData>(
     async (credentials) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
+      console.log("Sending login request with credentials:", {
+        email: credentials.email,
+        passwordLength: credentials.password.length,
+      });
+      try {
+        const res = await apiRequest("POST", "/api/login", credentials);
+        const data = await res.json();
+        console.log("Login response:", data);
+        return data;
+      } catch (error) {
+        console.error("Error in login fetch:", error);
+        throw error;
+      }
     },
     ["/api/user"],
     {
@@ -59,14 +73,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         toast({
           title: "Login successful",
-          description: `Welcome back, ${user.name || user.username}!`,
+          description: `Welcome back, ${user.name || "User"}!`,
         });
       },
       onError: (error: Error) => {
         console.error("Login error:", error);
         toast({
           title: "Login failed",
-          description: "Invalid username or password",
+          description: "Invalid email or password",
           variant: "destructive",
         });
       },
@@ -92,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         toast({
           title: "Registration successful",
-          description: `Welcome to HabitHero, ${user.name || user.username}!`,
+          description: `Welcome to HabitHero, ${user.name || "User"}!`,
         });
       },
       onError: (error: Error) => {

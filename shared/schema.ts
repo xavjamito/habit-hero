@@ -12,7 +12,6 @@ export const users = pgTable("users", {
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
   password: true,
   name: true,
   email: true,
@@ -21,7 +20,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
 // Modified User type to work with both MongoDB and PostgreSQL
 export type User = {
   id: string | number;
-  username: string;
+  username?: string;
   password: string;
   name: string | null;
   email: string;

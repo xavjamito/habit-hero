@@ -48,14 +48,34 @@ export class PrismaStorage implements IStorage {
     }
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { email },
+      });
+      return user ?? undefined;
+    } catch (error) {
+      console.error('Error getting user by email:', error);
+      return undefined;
+    }
+  }
+
   async createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> {
     try {
       console.log('PrismaStorage: Creating user with data:', { 
         ...userData, 
         password: '[REDACTED]' 
       });
+      
+      // Ensure username exists (required by Prisma)
+      // If no username is provided, generate one from the email
+      const dataWithUsername = {
+        ...userData,
+        username: userData.username || `user_${userData.email.split('@')[0]}_${Math.floor(Math.random() * 10000)}`
+      };
+      
       const newUser = await prisma.user.create({
-        data: userData,
+        data: dataWithUsername,
       });
       console.log('PrismaStorage: User created successfully with ID:', newUser.id);
       return newUser;

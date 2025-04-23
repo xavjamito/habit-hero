@@ -26,8 +26,11 @@ export function ProtectedRoute({
         if (isLoading) {
           console.log("Auth is loading, showing loader");
           return (
-            <div className='flex items-center justify-center min-h-screen'>
-              <Loader2 className='h-8 w-8 animate-spin text-primary' />
+            <div className='flex flex-col items-center justify-center min-h-screen bg-background'>
+              <div className='w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4'>
+                <Loader2 className='h-8 w-8 animate-spin text-primary' />
+              </div>
+              <p className='text-muted-foreground'>Loading your account...</p>
             </div>
           );
         }

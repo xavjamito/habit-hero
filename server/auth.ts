@@ -45,14 +45,20 @@ export function setupAuth(app: Express) {
   app.use(passport.session());
 
   passport.use(
-    new LocalStrategy(async (username, password, done) => {
-      const user = await storage.getUserByUsername(username);
-      if (!user || !(await comparePasswords(password, user.password))) {
-        return done(null, false);
-      } else {
-        return done(null, user);
+    new LocalStrategy(
+      {
+        usernameField: 'email',
+        passwordField: 'password'
+      },
+      async (email, password, done) => {
+        const user = await storage.getUserByEmail(email);
+        if (!user || !(await comparePasswords(password, user.password))) {
+          return done(null, false);
+        } else {
+          return done(null, user);
+        }
       }
-    }),
+    ),
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
@@ -67,15 +73,21 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/register", async (req, res, next) => {
-    const existingUser = await storage.getUserByUsername(req.body.username);
-    if (existingUser) {
-      return res.status(400).send("Username already exists");
+    // Check if email already exists
+    const existingEmail = await storage.getUserByEmail(req.body.email);
+    if (existingEmail) {
+      return res.status(400).send("Email already exists");
     }
 
-    const user = await storage.createUser({
+    // Generate a username if one doesn't exist
+    const userData = {
       ...req.body,
+      // If username isn't provided, generate one from email
+      username: req.body.username || `user_${req.body.email.split('@')[0]}_${Math.floor(Math.random() * 10000)}`,
       password: await hashPassword(req.body.password),
-    });
+    };
+
+    const user = await storage.createUser(userData);
 
     req.login(user, (err) => {
       if (err) return next(err);

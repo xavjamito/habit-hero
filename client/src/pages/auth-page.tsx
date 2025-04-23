@@ -3,416 +3,347 @@ import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { insertUserSchema } from "@shared/schema";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
-// Extend the schema for login
+// Login schema
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  email: z.string().email("Invalid email address"),
   password: z.string().min(1, "Password is required"),
 });
 
-// Extend the schema for registration with validation
-const registerSchema = insertUserSchema.extend({
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("Invalid email address"),
-});
+// Register schema
+const registerSchema = z
+  .object({
+    email: z.string().email("Invalid email address"),
+    name: z.string().min(1, "Name is required"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    confirmPassword: z.string().min(1, "Please confirm your password"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
-  const [activeTab, setActiveTab] = useState<string>("login");
   const { user, loginMutation, registerMutation } = useAuth();
   const [location, navigate] = useLocation();
+  const [isLoginView, setIsLoginView] = useState(true);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Add console logs to track auth state
-  useEffect(() => {
-    console.log("Auth state changed:", {
-      user,
-      isLoginSuccess: loginMutation.isSuccess,
-    });
+  // Direct state for form values
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
-    // Only navigate if we have a user
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerName, setRegisterName] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+
+  // Validation errors
+  const [loginErrors, setLoginErrors] = useState<Record<string, string>>({});
+  const [registerErrors, setRegisterErrors] = useState<Record<string, string>>(
+    {}
+  );
+
+  // Switch view handler - clear errors and reset the other form
+  const handleSwitchView = (toLogin: boolean) => {
+    if (toLogin) {
+      setRegisterErrors({});
+      setRegisterEmail("");
+      setRegisterName("");
+      setRegisterPassword("");
+      setRegisterConfirmPassword("");
+    } else {
+      setLoginErrors({});
+      // Don't clear login fields to allow easy signup with same credentials
+    }
+    setIsLoginView(toLogin);
+  };
+
+  // Redirect if user is already logged in
+  useEffect(() => {
     if (user) {
-      console.log("User authenticated, navigating to dashboard");
       navigate("/", { replace: true });
     }
-  }, [user, navigate, location]);
+  }, [user, navigate]);
 
-  // Forms
-  const loginForm = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      username: "",
-      password: "",
-    },
-  });
+  // Login form submit handler
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
 
-  const registerForm = useForm<RegisterFormValues>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: {
-      username: "",
-      password: "",
-      name: "",
-      email: "",
-    },
-  });
+    // Validate
+    const result = loginSchema.safeParse({
+      email: loginEmail,
+      password: loginPassword,
+    });
 
-  const onLoginSubmit = (data: LoginFormValues) => {
-    console.log("Login submitted:", data);
+    if (!result.success) {
+      const formattedErrors: Record<string, string> = {};
+      result.error.errors.forEach((error) => {
+        const path = error.path[0].toString();
+        formattedErrors[path] = error.message;
+      });
+      setLoginErrors(formattedErrors);
+      return;
+    }
 
-    // Disable the form while submitting
-    loginForm.reset(data, { keepValues: true });
-
-    loginMutation.mutate(data, {
-      onSuccess: (userData) => {
-        console.log("Login successful in mutation callback, user:", userData);
-
-        // Force the query client to update with the user data
-        queryClient.setQueryData(["/api/user"], userData);
-
-        // Use a small delay to ensure state updates have propagated
-        setTimeout(() => {
-          // Verify the user data is in the cache
-          const cachedUser = queryClient.getQueryData(["/api/user"]);
-          console.log("Cached user after login:", cachedUser);
-
-          // Force navigation regardless of user state
-          navigate("/", { replace: true });
-        }, 200);
-      },
-      onError: (error) => {
-        console.error("Login error in mutation callback:", error);
-        toast({
-          title: "Login failed",
-          description: "Please check your credentials and try again.",
-          variant: "destructive",
-        });
-      },
+    // Clear errors and submit
+    setLoginErrors({});
+    loginMutation.mutate({
+      email: loginEmail,
+      password: loginPassword,
     });
   };
 
-  const onRegisterSubmit = (data: RegisterFormValues) => {
-    console.log("Registration submitted:", data);
-    registerMutation.mutate(data, {
-      onSuccess: () => {
-        console.log("Registration successful, navigating");
-        // Force navigation after successful registration
-        setTimeout(() => navigate("/", { replace: true }), 100);
-      },
+  // Registration form submit handler
+  const handleRegisterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate
+    const result = registerSchema.safeParse({
+      email: registerEmail,
+      name: registerName,
+      password: registerPassword,
+      confirmPassword: registerConfirmPassword,
+    });
+
+    if (!result.success) {
+      const formattedErrors: Record<string, string> = {};
+      result.error.errors.forEach((error) => {
+        const path = error.path[0].toString();
+        formattedErrors[path] = error.message;
+      });
+      setRegisterErrors(formattedErrors);
+      return;
+    }
+
+    // Clear errors and submit
+    setRegisterErrors({});
+
+    // Log registration data
+    console.log("Registration data:", {
+      email: registerEmail,
+      name: registerName,
+      password: registerPassword,
+    });
+
+    registerMutation.mutate({
+      email: registerEmail,
+      name: registerName,
+      password: registerPassword,
     });
   };
 
   return (
-    <div className='min-h-screen bg-background flex flex-col lg:flex-row'>
-      {/* Hero Section */}
-      <div className='lg:w-1/2 bg-primary p-8 flex flex-col justify-center text-white'>
-        <div className='max-w-md mx-auto'>
-          <div className='mb-6 flex items-center'>
-            <div className='w-10 h-10 rounded-md bg-white flex items-center justify-center'>
-              <svg
-                xmlns='http://www.w3.org/2000/svg'
-                className='h-6 w-6 text-primary'
-                viewBox='0 0 20 20'
-                fill='currentColor'
-              >
-                <path
-                  fillRule='evenodd'
-                  d='M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z'
-                  clipRule='evenodd'
-                />
-              </svg>
-            </div>
-            <h1 className='text-2xl font-semibold ml-3'>HabitHero</h1>
-          </div>
-
-          <h2 className='text-3xl font-bold mb-4'>Build Better Habits</h2>
-          <p className='text-lg opacity-90 mb-6'>
-            Track your daily habits, build streaks, and achieve your goals with
-            our simple and effective habit tracking system.
-          </p>
-
-          <div className='space-y-6'>
-            <div className='flex items-start'>
-              <div className='mr-4 p-2 bg-white bg-opacity-20 rounded-full'>
-                <svg
-                  xmlns='http://www.w3.org/2000/svg'
-                  className='h-5 w-5'
-                  viewBox='0 0 20 20'
-                  fill='currentColor'
-                >
-                  <path
-                    fillRule='evenodd'
-                    d='M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z'
-                    clipRule='evenodd'
-                  />
-                </svg>
-              </div>
-              <div>
-                <h3 className='font-semibold'>Daily Tracking</h3>
-                <p className='opacity-80'>
-                  Mark habits complete every day and build consistency
-                </p>
-              </div>
-            </div>
-
-            <div className='flex items-start'>
-              <div className='mr-4 p-2 bg-white bg-opacity-20 rounded-full'>
-                <svg
-                  xmlns='http://www.w3.org/2000/svg'
-                  className='h-5 w-5'
-                  viewBox='0 0 20 20'
-                  fill='currentColor'
-                >
-                  <path d='M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z' />
-                </svg>
-              </div>
-              <div>
-                <h3 className='font-semibold'>Visualize Progress</h3>
-                <p className='opacity-80'>
-                  See your improvements over time with weekly stats
-                </p>
-              </div>
-            </div>
-
-            <div className='flex items-start'>
-              <div className='mr-4 p-2 bg-white bg-opacity-20 rounded-full'>
-                <svg
-                  xmlns='http://www.w3.org/2000/svg'
-                  className='h-5 w-5'
-                  viewBox='0 0 20 20'
-                  fill='currentColor'
-                >
-                  <path
-                    fillRule='evenodd'
-                    d='M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z'
-                    clipRule='evenodd'
-                  />
-                </svg>
-              </div>
-              <div>
-                <h3 className='font-semibold'>Build Streaks</h3>
-                <p className='opacity-80'>
-                  Maintain momentum with streak tracking
-                </p>
-              </div>
-            </div>
-          </div>
+    <div className='min-h-screen bg-background flex justify-center items-center p-4'>
+      <div className='w-full max-w-md'>
+        {/* 3D illustration */}
+        <div className='mb-8 flex justify-center'>
+          <img
+            src='/assets/3d-workspace.svg'
+            alt='Productivity illustration'
+            className='w-44 h-44'
+          />
         </div>
-      </div>
 
-      {/* Auth Forms */}
-      <div className='lg:w-1/2 p-8 flex items-center justify-center'>
-        <Card className='w-full max-w-md'>
-          <CardHeader>
-            <CardTitle className='text-2xl'>Welcome to HabitHero</CardTitle>
-            <CardDescription>
-              {activeTab === "login"
-                ? "Sign in to your account to continue"
-                : "Create an account to get started"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue='login' onValueChange={setActiveTab}>
-              <TabsList className='grid grid-cols-2 mb-6'>
-                <TabsTrigger value='login'>Login</TabsTrigger>
-                <TabsTrigger value='register'>Register</TabsTrigger>
-              </TabsList>
+        {/* Title */}
+        <div className='text-center mb-8'>
+          <h1 className='text-3xl font-bold mb-1'>
+            The only productivity app you need
+          </h1>
+          <p className='text-muted-foreground'>
+            Track your tasks, build habits, and achieve your goals
+          </p>
+        </div>
 
-              <TabsContent value='login'>
-                <Form {...loginForm}>
-                  <form
-                    onSubmit={loginForm.handleSubmit(onLoginSubmit)}
-                    className='space-y-4'
-                  >
-                    <FormField
-                      control={loginForm.control}
-                      name='username'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Username</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder='Enter your username'
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+        {/* Login Form */}
+        {isLoginView ? (
+          <div>
+            <form onSubmit={handleLoginSubmit} className='space-y-4'>
+              <div>
+                <Input
+                  type='email'
+                  placeholder='Email'
+                  className='bg-secondary border-0 h-12 placeholder:text-muted-foreground'
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                />
+                {loginErrors.email && (
+                  <p className='text-sm font-medium text-destructive mt-1'>
+                    {loginErrors.email}
+                  </p>
+                )}
+              </div>
 
-                    <FormField
-                      control={loginForm.control}
-                      name='password'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Password</FormLabel>
-                          <FormControl>
-                            <Input
-                              type='password'
-                              placeholder='Enter your password'
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+              <div>
+                <Input
+                  type='password'
+                  placeholder='Password'
+                  className='bg-secondary border-0 h-12 placeholder:text-muted-foreground'
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                />
+                {loginErrors.password && (
+                  <p className='text-sm font-medium text-destructive mt-1'>
+                    {loginErrors.password}
+                  </p>
+                )}
+              </div>
 
-                    <Button
-                      type='submit'
-                      className='w-full'
-                      disabled={loginMutation.isPending}
-                    >
-                      {loginMutation.isPending ? (
-                        <>
-                          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                          Signing in...
-                        </>
-                      ) : (
-                        "Sign In"
-                      )}
-                    </Button>
-                  </form>
-                </Form>
-              </TabsContent>
-
-              <TabsContent value='register'>
-                <Form {...registerForm}>
-                  <form
-                    onSubmit={registerForm.handleSubmit(onRegisterSubmit)}
-                    className='space-y-4'
-                  >
-                    <FormField
-                      control={registerForm.control}
-                      name='name'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Full Name</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder='Enter your full name'
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={registerForm.control}
-                      name='email'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input
-                              type='email'
-                              placeholder='Enter your email'
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={registerForm.control}
-                      name='username'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Username</FormLabel>
-                          <FormControl>
-                            <Input placeholder='Choose a username' {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={registerForm.control}
-                      name='password'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Password</FormLabel>
-                          <FormControl>
-                            <Input
-                              type='password'
-                              placeholder='Create a password'
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <Button
-                      type='submit'
-                      className='w-full'
-                      disabled={registerMutation.isPending}
-                    >
-                      {registerMutation.isPending ? (
-                        <>
-                          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                          Creating account...
-                        </>
-                      ) : (
-                        "Create Account"
-                      )}
-                    </Button>
-                  </form>
-                </Form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-          <CardFooter className='flex justify-center border-t pt-4'>
-            <p className='text-sm text-muted-foreground'>
-              {activeTab === "login"
-                ? "Don't have an account? "
-                : "Already have an account? "}
               <Button
-                variant='link'
-                className='p-0'
-                onClick={() =>
-                  setActiveTab(activeTab === "login" ? "register" : "login")
-                }
+                type='submit'
+                className='w-full h-12 bg-primary btn-glow rounded-full'
+                disabled={loginMutation.isPending}
               >
-                {activeTab === "login" ? "Sign up" : "Sign in"}
+                {loginMutation.isPending ? (
+                  <>
+                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign in with Email"
+                )}
               </Button>
-            </p>
-          </CardFooter>
-        </Card>
+            </form>
+
+            <div className='relative my-6'>
+              <div className='absolute inset-0 flex items-center'>
+                <div className='w-full border-t border-border'></div>
+              </div>
+              <div className='relative flex justify-center text-xs'>
+                <span className='bg-background px-2 text-muted-foreground'>
+                  Or continue with
+                </span>
+              </div>
+            </div>
+
+            <div className='flex gap-4'>
+              <Button
+                variant='outline'
+                className='w-full h-12 bg-secondary/50 border-0'
+              >
+                Google
+              </Button>
+              <Button
+                variant='outline'
+                className='w-full h-12 bg-secondary/50 border-0'
+              >
+                Apple ID
+              </Button>
+            </div>
+
+            <div className='text-center mt-6 text-sm text-muted-foreground'>
+              By continuing you agree to the Terms and Conditions
+            </div>
+          </div>
+        ) : (
+          <div>
+            <form onSubmit={handleRegisterSubmit} className='space-y-4'>
+              <div>
+                <Input
+                  type='email'
+                  placeholder='Email address'
+                  className='bg-secondary border-0 h-12 placeholder:text-muted-foreground'
+                  value={registerEmail}
+                  onChange={(e) => setRegisterEmail(e.target.value)}
+                />
+                {registerErrors.email && (
+                  <p className='text-sm font-medium text-destructive mt-1'>
+                    {registerErrors.email}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Input
+                  placeholder='Full Name'
+                  className='bg-secondary border-0 h-12 placeholder:text-muted-foreground'
+                  value={registerName}
+                  onChange={(e) => setRegisterName(e.target.value)}
+                />
+                {registerErrors.name && (
+                  <p className='text-sm font-medium text-destructive mt-1'>
+                    {registerErrors.name}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Input
+                  type='password'
+                  placeholder='Password'
+                  className='bg-secondary border-0 h-12 placeholder:text-muted-foreground'
+                  value={registerPassword}
+                  onChange={(e) => setRegisterPassword(e.target.value)}
+                />
+                {registerErrors.password && (
+                  <p className='text-sm font-medium text-destructive mt-1'>
+                    {registerErrors.password}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Input
+                  type='password'
+                  placeholder='Confirm Password'
+                  className='bg-secondary border-0 h-12 placeholder:text-muted-foreground'
+                  value={registerConfirmPassword}
+                  onChange={(e) => setRegisterConfirmPassword(e.target.value)}
+                />
+                {registerErrors.confirmPassword && (
+                  <p className='text-sm font-medium text-destructive mt-1'>
+                    {registerErrors.confirmPassword}
+                  </p>
+                )}
+              </div>
+
+              <Button
+                type='submit'
+                className='w-full h-12 bg-primary btn-glow rounded-full'
+                disabled={registerMutation.isPending}
+              >
+                {registerMutation.isPending ? (
+                  <>
+                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                    Creating account...
+                  </>
+                ) : (
+                  "Sign up with Email"
+                )}
+              </Button>
+            </form>
+          </div>
+        )}
+
+        {/* Toggle between login and register */}
+        <div className='mt-6 text-center'>
+          <Button
+            variant='link'
+            className='text-primary'
+            onClick={() => handleSwitchView(!isLoginView)}
+          >
+            {isLoginView
+              ? "Don't have an account? Sign up"
+              : "Already have an account? Sign in"}
+          </Button>
+        </div>
       </div>
     </div>
   );
