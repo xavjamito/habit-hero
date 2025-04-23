@@ -2,8 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Habit, Completion } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
-import { Sidebar } from "@/components/ui/sidebar";
-import BottomNavbar from "@/components/ui/bottom-navbar";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -309,39 +308,30 @@ export default function HabitsPage() {
   };
 
   return (
-    <div className='flex flex-col md:flex-row h-screen overflow-hidden'>
-      <Sidebar />
-
-      <main className='flex-1 flex flex-col overflow-hidden'>
-        <header className='bg-white shadow-sm z-10'>
+    <AppLayout>
+      <div className='h-full flex flex-col overflow-hidden'>
+        <header className='shadow-sm z-10'>
           <div className='flex justify-between items-center py-4 px-4 sm:px-6 lg:px-8'>
             <h1 className='text-xl font-semibold'>All Habits</h1>
-
-            <div className='flex items-center'>
-              <div className='relative max-w-xs'>
-                <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
-                  <Search className='h-5 w-5 text-gray-400' />
-                </div>
-                <Input
-                  className='pl-10'
-                  placeholder='Search habits...'
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-
-              <Button
-                size='icon'
-                onClick={() => setShowCreateDialog(true)}
-                className='ml-3 bg-primary text-white'
-              >
-                <Plus className='h-5 w-5' />
-              </Button>
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className='h-4 w-4 mr-2' />
+              New Habit
+            </Button>
+          </div>
+          <div className='px-4 sm:px-6 lg:px-8 pb-4'>
+            <div className='relative'>
+              <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground' />
+              <Input
+                className='pl-10'
+                placeholder='Search habits...'
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
           </div>
         </header>
 
-        <div className='flex-1 overflow-y-auto p-4 sm:p-6 lg:px-8 bg-background'>
+        <div className='flex-1 overflow-y-auto p-4 sm:px-6 lg:px-8'>
           {isLoading ? (
             <div className='flex justify-center items-center h-full'>
               <Loader2 className='h-8 w-8 animate-spin text-primary' />
@@ -368,9 +358,7 @@ export default function HabitsPage() {
             </Tabs>
           )}
         </div>
-      </main>
-
-      <BottomNavbar currentPath='/habits' />
+      </div>
 
       <CreateHabitDialog
         open={showCreateDialog}
@@ -387,6 +375,6 @@ export default function HabitsPage() {
         }}
         habit={selectedHabit}
       />
-    </div>
+    </AppLayout>
   );
 }

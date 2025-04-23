@@ -10,6 +10,8 @@ import {
   User,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useCreateHabit } from "@/hooks/use-create-habit";
+import { GlobalCreateHabitDialog } from "@/components/global-create-habit-dialog";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -18,13 +20,16 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
+  const { open: openCreateHabitDialog } = useCreateHabit();
 
   // Active page determination
   const isActive = (path: string) => location === path;
 
   // Generate avatar URL from username if available
   const avatarUrl = user
-    ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`
+    ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${
+        user.username || user.email
+      }`
     : "";
 
   return (
@@ -38,15 +43,13 @@ export function AppLayout({ children }: AppLayoutProps) {
         />
         <NavButton
           icon={<ListTodo className='w-5 h-5' />}
-          isActive={isActive("/tasks")}
-          onClick={() => navigate("/tasks")}
+          isActive={isActive("/habits")}
+          onClick={() => navigate("/habits")}
         />
         <NavButton
           icon={<Plus className='w-5 h-5' />}
           isActive={false}
-          onClick={() => {
-            /* Open add task/habit modal */
-          }}
+          onClick={openCreateHabitDialog}
           primary
         />
         <NavButton
@@ -99,8 +102,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           />
           <NavButton
             icon={<ListTodo className='w-5 h-5' />}
-            isActive={isActive("/tasks")}
-            onClick={() => navigate("/tasks")}
+            isActive={isActive("/habits")}
+            onClick={() => navigate("/habits")}
           />
           <NavButton
             icon={<Calendar className='w-5 h-5' />}
@@ -115,9 +118,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <NavButton
             icon={<Plus className='w-5 h-5' />}
             isActive={false}
-            onClick={() => {
-              /* Open add task/habit modal */
-            }}
+            onClick={openCreateHabitDialog}
             primary
           />
         </div>
@@ -151,9 +152,12 @@ export function AppLayout({ children }: AppLayoutProps) {
       </div>
 
       {/* Main content */}
-      <div className='flex-1 pb-20 md:pb-0 md:ml-0 overflow-hidden'>
+      <div className='flex-1 pb-20 md:pb-0 md:ml-0 overflow-hidden bg-background'>
         {children}
       </div>
+
+      {/* Global Create Habit Dialog */}
+      <GlobalCreateHabitDialog />
     </div>
   );
 }

@@ -37,6 +37,7 @@ export const habits = pgTable("habits", {
   name: text("name").notNull(),
   description: text("description"),
   color: text("color").notNull().default("#8b5cf6"),
+  favorite: boolean("favorite").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -45,6 +46,7 @@ export const insertHabitSchema = createInsertSchema(habits).pick({
   name: true,
   description: true,
   color: true,
+  favorite: true,
 });
 
 // Modified Habit type to work with both MongoDB and PostgreSQL
@@ -54,6 +56,8 @@ export type Habit = {
   name: string;
   description: string | null;
   color: string | null;
+  isFavorite: boolean;
+  favorite?: boolean; // Alias for compatibility with current code
   createdAt: Date;
   updatedAt?: Date;
 };

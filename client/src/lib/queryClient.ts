@@ -7,7 +7,7 @@ async function throwIfResNotOk(res: Response) {
 }
 
 export async function apiRequest(
-  method: "GET" | "POST" | "PUT" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
   endpoint: string,
   body?: any
 ): Promise<Response> {

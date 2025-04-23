@@ -2,14 +2,42 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Habit, Completion } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
-import { Sidebar } from "@/components/ui/sidebar";
-import BottomNavbar from "@/components/ui/bottom-navbar";
-import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Loader2, Calendar as CalendarIcon } from "lucide-react";
-import { format, isSameDay, startOfMonth, endOfMonth } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Calendar as CalendarIcon,
+} from "lucide-react";
+import {
+  format,
+  isToday,
+  addMonths,
+  subMonths,
+  isSameDay,
+  startOfMonth,
+  endOfMonth,
+} from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import {
+  apiRequest,
+  queryClient,
+  useMutationWithInvalidation,
+} from "@/lib/queryClient";
 import { motion } from "framer-motion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
 
 export default function CalendarPage() {
   const { user } = useAuth();
@@ -78,27 +106,34 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className='flex flex-col md:flex-row h-screen overflow-hidden'>
-      {/* Sidebar */}
-      <Sidebar />
-
-      {/* Main Content */}
-      <main className='flex-1 flex flex-col overflow-hidden'>
-        {/* Header */}
-        <header className='bg-white shadow-sm z-10'>
+    <AppLayout>
+      <div className='flex flex-col h-full'>
+        <header className='shadow-sm z-10'>
           <div className='flex justify-between items-center py-4 px-4 sm:px-6 lg:px-8'>
-            <h1 className='text-xl font-semibold flex items-center'>
-              <CalendarIcon className='mr-2 h-5 w-5' />
-              Calendar View
-            </h1>
-            <div className='text-sm text-muted-foreground'>
-              {format(date, "MMMM yyyy")}
+            <h1 className='text-xl font-semibold'>Calendar</h1>
+            <div className='flex space-x-2'>
+              <Button
+                variant='outline'
+                size='icon'
+                onClick={() => setDate(subMonths(date, 1))}
+              >
+                <ChevronLeft className='h-4 w-4' />
+              </Button>
+              <Button variant='outline' onClick={() => setDate(new Date())}>
+                Today
+              </Button>
+              <Button
+                variant='outline'
+                size='icon'
+                onClick={() => setDate(addMonths(date, 1))}
+              >
+                <ChevronRight className='h-4 w-4' />
+              </Button>
             </div>
           </div>
         </header>
 
-        {/* Content */}
-        <div className='flex-1 overflow-y-auto p-4 sm:p-6 lg:px-8 bg-background'>
+        <div className='flex-1 overflow-auto p-4'>
           {isLoading ? (
             <div className='flex justify-center items-center h-full'>
               <Loader2 className='h-8 w-8 animate-spin text-primary' />
@@ -250,10 +285,7 @@ export default function CalendarPage() {
             </div>
           )}
         </div>
-      </main>
-
-      {/* Bottom Navbar */}
-      <BottomNavbar currentPath='/calendar' />
-    </div>
+      </div>
+    </AppLayout>
   );
 }

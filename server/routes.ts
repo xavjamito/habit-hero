@@ -22,15 +22,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     try {
       // Get the data from the request body
-      const { name, description, color } = req.body;
+      const { name, description, color, favorite } = req.body;
       
       // Create a habit object with required fields
       const habitData = {
         name,
         userId: req.user.id,
         description: description || null,
-        color: color || "#8b5cf6"
+        color: color || "#8b5cf6",
+        isFavorite: favorite || false
       };
+      
+      console.log('Creating habit with data:', JSON.stringify(habitData));
       
       const habit = await storage.createHabit(habitData);
       res.status(201).json(habit);
@@ -50,20 +53,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ error: "Habit not found" });
     }
     
-    if (habit.userId !== req.user.id) {
+    if (habit.userId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: "Not authorized to update this habit" });
     }
     
     try {
       // Only extract valid fields
-      const { name, description, color } = req.body;
-      const updatedData: Partial<typeof req.body> = {};
+      const { name, description, color, favorite } = req.body;
+      const updatedData: Partial<Omit<typeof habit, 'id' | 'userId' | 'createdAt' | 'updatedAt'>> = {};
       
       if (name !== undefined) updatedData.name = name;
       if (description !== undefined) updatedData.description = description;
       if (color !== undefined) updatedData.color = color;
+      if (favorite !== undefined) updatedData.isFavorite = favorite;
+      
+      console.log(`Updating habit ${habitId} with data:`, JSON.stringify(updatedData));
       
       const updatedHabit = await storage.updateHabit(habitId, updatedData);
+      
+      if (!updatedHabit) {
+        return res.status(500).json({ error: "Failed to update habit" });
+      }
+      
       res.json(updatedHabit);
     } catch (error) {
       console.error("Error updating habit:", error);
@@ -81,7 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ error: "Habit not found" });
     }
     
-    if (habit.userId !== req.user.id) {
+    if (habit.userId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ error: "Not authorized to delete this habit" });
     }
     
@@ -91,6 +102,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.sendStatus(204);
     } else {
       res.status(500).json({ error: "Failed to delete habit" });
+    }
+  });
+  
+  // Add a special route for toggling favorite status
+  app.patch("/api/habits/:id/favorite", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    const habitId = req.params.id;
+    console.log(`Favorite toggle request for habit ID: ${habitId}`);
+    
+    try {
+      const habit = await storage.getHabit(habitId);
+      
+      if (!habit) {
+        console.error(`Error: Habit with ID ${habitId} not found`);
+        return res.status(404).json({ error: "Habit not found" });
+      }
+      
+      console.log(`Found habit: ${habit.name}, current favorite status: ${habit.isFavorite}`);
+      console.log(`User ID from habit: ${habit.userId}, User ID from request: ${req.user.id}`);
+      
+      if (habit.userId.toString() !== req.user.id.toString()) {
+        console.error(`Authorization error: Habit belongs to user ${habit.userId}, but request is from user ${req.user.id}`);
+        return res.status(403).json({ error: "Not authorized to update this habit" });
+      }
+      
+      // Toggle the favorite status
+      const updatedData = {
+        isFavorite: !habit.isFavorite
+      };
+      
+      console.log(`Toggling favorite status to: ${updatedData.isFavorite}`);
+      
+      const updatedHabit = await storage.updateHabit(habitId, updatedData);
+      
+      if (!updatedHabit) {
+        console.error(`Error: Failed to update habit with ID ${habitId}`);
+        return res.status(500).json({ error: "Failed to update favorite status" });
+      }
+      
+      console.log(`Successfully updated habit: ${updatedHabit.name}, new favorite status: ${updatedHabit.isFavorite}`);
+      res.json(updatedHabit);
+    } catch (error) {
+      console.error("Error updating habit favorite status:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Error details:", errorMessage);
+      res.status(500).json({ error: `Failed to update favorite status: ${errorMessage}` });
     }
   });
   
@@ -120,9 +178,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { habitId, date } = req.body;
       
+      console.log(`Attempting to create completion for habit ID: ${habitId}`);
+      
+      if (!habitId) {
+        console.error("Error: Missing habitId in request");
+        return res.status(400).json({ error: "Missing habitId in request" });
+      }
+      
       // Verify the habit belongs to the user
       const habit = await storage.getHabit(habitId);
-      if (!habit || habit.userId.toString() !== req.user.id.toString()) {
+      
+      // Check if habit exists before comparing userIds
+      if (!habit) {
+        console.error(`Error getting habit: Habit with ID ${habitId} not found`);
+        return res.status(404).json({ error: "Habit not found" });
+      }
+      
+      console.log(`Found habit: ${habit.name}, owned by userId: ${habit.userId}`);
+      console.log(`Current user ID: ${req.user.id}`);
+      
+      if (habit.userId.toString() !== req.user.id.toString()) {
+        console.error(`Authorization error: Habit belongs to user ${habit.userId}, but request is from user ${req.user.id}`);
         return res.status(403).json({ error: "Not authorized" });
       }
       

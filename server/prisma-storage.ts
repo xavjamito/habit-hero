@@ -109,12 +109,26 @@ export class PrismaStorage implements IStorage {
 
   async getHabit(id: number | string): Promise<Habit | undefined> {
     try {
+      console.log(`PrismaStorage: Getting habit with ID: ${id}`);
+      
+      if (!id) {
+        console.error('Error getting habit: ID is undefined or null');
+        return undefined;
+      }
+      
       const habit = await prisma.habit.findUnique({
         where: { id: id.toString() },
       });
-      return habit ?? undefined;
+      
+      if (!habit) {
+        console.log(`PrismaStorage: No habit found with ID: ${id}`);
+        return undefined;
+      }
+      
+      console.log(`PrismaStorage: Found habit: ${habit.name}`);
+      return habit;
     } catch (error) {
-      console.error('Error getting habit:', error);
+      console.error(`Error getting habit with ID ${id}:`, error);
       return undefined;
     }
   }
@@ -138,12 +152,16 @@ export class PrismaStorage implements IStorage {
     habitUpdate: Partial<Omit<Habit, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>
   ): Promise<Habit | undefined> {
     try {
+      console.log(`PrismaStorage: Updating habit with ID: ${id}`);
+      console.log(`Update data:`, JSON.stringify(habitUpdate));
+      
       return await prisma.habit.update({
         where: { id: id.toString() },
         data: habitUpdate,
       });
     } catch (error) {
       console.error('Error updating habit:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       return undefined;
     }
   }
